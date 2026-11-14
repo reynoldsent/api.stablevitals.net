@@ -1,0 +1,2307 @@
+{
+  "info": {
+    "name": "Stable Vitals API",
+    "description": "# Stable Vitals API\n\nPhase 1 barn API, including water sensor readings. Sensor hardware is not required to run the backend.\n\n## Run the collection\n1. Start the API with `npm start`.\n2. Import this collection and the **Stable Vitals — Local** environment.\n3. Select that environment.\n4. Open Collection Runner and run from top to bottom.\n\nSignup stores the owner token. Password reset, near the end, verifies a one-time code and then logs in again. Creating a horse, alert, invite, or checkout stores the id used by the next request. Logout is last and checks that the token was revoked.\n\n## Sensor readings\nSet `SENSOR_API_KEY` in the server `.env` and set the matching `sensorApiKey` in the Postman environment. A device sends `POST /api/v1/sensor/readings` with `x-sensor-api-key` and JSON `{ \"horseId\": \"...\", \"waterConsumedLiters\": 2.5, \"recordedAt\": \"2026-11-05T10:00:00.000Z\" }`. `recordedAt` is optional; water consumed is in liters since the previous reading. The app reads history from `GET /api/v1/horses/:id/sensor-readings?limit=50` and latest from `GET /api/v1/horses/:id/sensor-readings/latest` using its bearer token. Use HTTPS and keep the sensor key secret in production.\n\n## Roles\n- `all_access` — owner. Horses, team, billing, and settings.\n- `basic_access` — notes, care, alerts, and settings.\n- `view_only` — only horses in `allowedHorseIds`.\n\n## Payment\nCheckout stays pending until `POST /api/v1/webhooks/payment` arrives with the `x-webhook-secret` header.\nUse `payment.succeeded` or `payment.failed`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "webhookSecret",
+      "value": "change-this-webhook-secret"
+    },
+    {
+      "key": "sensorApiKey",
+      "value": "change-this-sensor-api-key"
+    },
+    {
+      "key": "ownerPassword",
+      "value": "StableVitals123"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "revokedToken",
+      "value": ""
+    },
+    {
+      "key": "ownerEmail",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "barnId",
+      "value": ""
+    },
+    {
+      "key": "horseId",
+      "value": ""
+    },
+    {
+      "key": "alertId",
+      "value": ""
+    },
+    {
+      "key": "memberId",
+      "value": ""
+    },
+    {
+      "key": "memberEmail",
+      "value": ""
+    },
+    {
+      "key": "memberPassword",
+      "value": ""
+    },
+    {
+      "key": "memberToken",
+      "value": ""
+    },
+    {
+      "key": "checkoutId",
+      "value": ""
+    },
+    {
+      "key": "otp",
+      "value": ""
+    },
+    {
+      "key": "resetToken",
+      "value": ""
+    },
+    {
+      "key": "nextPassword",
+      "value": "StableVitals456"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "description": "Confirms the API process and MongoDB connection.",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Returns 200 when MongoDB is connected, otherwise 503."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Database is connected', function () {",
+                  "  pm.expect(pm.response.json().db).to.eql('connected');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "description": "Creates the barn and owner, then issues a bearer token. Logout lives at the end of the collection.",
+      "item": [
+        {
+          "name": "Signup",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ada Owner\",\n  \"email\": \"owner.{{$timestamp}}@northbarn.test\",\n  \"password\": \"{{ownerPassword}}\",\n  \"barnName\": \"North Barn\",\n  \"timezone\": \"America/New_York\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/signup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "signup"
+              ]
+            },
+            "description": "Creates the barn, an all_access owner, and a subscription with status none. The email is unique on every run."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Barn and owner created', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.user.role).to.eql('all_access');",
+                  "  pm.expect(body.barn.name).to.eql('North Barn');",
+                  "  pm.collectionVariables.set('token', body.token);",
+                  "  pm.collectionVariables.set('ownerEmail', body.user.email);",
+                  "  pm.collectionVariables.set('userId', body.user._id);",
+                  "  pm.collectionVariables.set('barnId', body.barn._id);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{ownerEmail}}\",\n  \"password\": \"{{ownerPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Returns a fresh 7-day token for the owner created above."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login succeeded', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('token', body.token);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Current user",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me"
+              ]
+            },
+            "description": "Returns the signed-in user, role, and barn."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Role is present', function () {",
+                  "  pm.expect(pm.response.json().user.role).to.eql('all_access');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Horses",
+      "description": "Horse management. Creating a horse saves horseId for the rest of the run. A stall generates sensor id SV- plus the stall padded to 4 digits.",
+      "item": [
+        {
+          "name": "Add horse",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Starlight\",\n  \"stall\": \"12\",\n  \"aisle\": \"B\",\n  \"type\": \"Warmblood\",\n  \"age\": 8,\n  \"dob\": \"2018-04-12\",\n  \"discipline\": \"Jumper\",\n  \"workLevel\": \"Training\",\n  \"waterTarget\": 12,\n  \"waterTargetRange\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/horses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "horses"
+              ]
+            },
+            "description": "all_access only. sensorId is generated from the stall."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Horse created', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  const horse = pm.response.json().horse;",
+                  "  pm.expect(horse.sensorId).to.eql('SV-0012');",
+                  "  pm.collectionVariables.set('horseId', horse._id);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List horses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/horses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "horses"
+              ],
+              "query": [
+                {
+                  "key": "archived",
+                  "value": "false",
+                  "description": "true returns archived horses only.",
+                  "disabled": true
+                },
+                {
+                  "key": "away",
+                  "value": "true",
+                  "description": "true returns horses marked away.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Horses in this barn. view_only users only receive allowedHorseIds. Enable a query param to filter."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Full profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/horses/{{horseId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "horses",
+                "{{horseId}}"
+              ]
+            },
+            "description": "Horse record plus counts for notes, care entries, and open alerts."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Profile summary is included', function () {",
+                  "  pm.expect(pm.response.json().summary).to.have.keys(\"noteCount\", \"careEntryCount\", \"openAlertCount\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Edit horse",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Starlight\",\n  \"discipline\": \"Dressage\",\n  \"workLevel\": \"Light work\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/horses/{{horseId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "horses",
+                "{{horseId}}"
+              ]
+            },
+            "description": "all_access only. Send only the fields that change."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Move stall",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stall\": \"4\",\n  \"effectiveAt\": \"{{$isoTimestamp}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/horses/{{horseId}}/move",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "horses",
+                "{{horseId}}",
+                "move"
+              ]
+            },
+            "description": "all_access only. Updates the stall and regenerates sensorId."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Sensor id follows the new stall', function () {",
+                  "  pm.expect(pm.response.json().horse.sensorId).to.eql('SV-0004');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Archive horse",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"archived\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/horses/{{horseId}}/archive",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "horses",
+                "{{horseId}}",
+                "archive"
+              ]
+            },
+            "description": "all_access only. Send archived true or false."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unarchive horse",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"archived\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/horses/{{horseId}}/archive",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "horses",
+                "{{horseId}}",
+                "archive"
+              ]
+            },
+            "description": "Restores the horse so later profile and alert requests can use it."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mark away",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"away\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/horses/{{horseId}}/away",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "horses",
+                "{{horseId}}",
+                "away"
+              ]
+            },
+            "description": "all_access and basic_access. Send away true or false."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update monitoring",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"monitoringEnabled\": true,\n  \"waterTarget\": 14,\n  \"waterTargetRange\": 2,\n  \"lowWaterCheckPercent\": 20,\n  \"urgentNoDrinkHours\": 8,\n  \"highWaterPercent\": 35,\n  \"hoursWithoutDrink\": 6\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/horses/{{horseId}}/monitoring",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "horses",
+                "{{horseId}}",
+                "monitoring"
+              ]
+            },
+            "description": "Water targets and alert thresholds for this horse."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Approve baseline",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/horses/{{horseId}}/approve-baseline",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "horses",
+                "{{horseId}}",
+                "approve-baseline"
+              ]
+            },
+            "description": "all_access only. Marks the drinking baseline as approved."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Horse profile",
+      "description": "Staff notes and the care log. The care report covers the last 30 days.",
+      "item": [
+        {
+          "name": "Add note",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Ate well this morning. Left a little hay.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/horses/{{horseId}}/log-notes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "horses",
+                "{{horseId}}",
+                "log-notes"
+              ]
+            },
+            "description": "all_access and basic_access. The author is taken from the token, not the body."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Author comes from the token', function () {",
+                  "  pm.expect(pm.response.json().note.author).to.eql('Ada Owner');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List notes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/horses/{{horseId}}/log-notes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "horses",
+                "{{horseId}}",
+                "log-notes"
+              ]
+            },
+            "description": "Newest notes first."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Add care entry",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"food\",\n  \"item\": \"Hay\",\n  \"amount\": \"2 flakes\",\n  \"notes\": \"Soaked\",\n  \"at\": \"{{$isoTimestamp}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/horses/{{horseId}}/care-entries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "horses",
+                "{{horseId}}",
+                "care-entries"
+              ]
+            },
+            "description": "Category is food, electrolyte, supplement, or other. at is the time the care happened."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List care entries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/horses/{{horseId}}/care-entries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "horses",
+                "{{horseId}}",
+                "care-entries"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-01-01T00:00:00.000Z",
+                  "description": "Include entries at or after this time.",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31T23:59:59.000Z",
+                  "description": "Include entries at or before this time.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Optional from and to filters use ISO dates."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Care report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/horses/{{horseId}}/care-report",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "horses",
+                "{{horseId}}",
+                "care-report"
+              ]
+            },
+            "description": "JSON summary of the last 30 days, grouped by category."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Report has a total', function () {",
+                  "  pm.expect(pm.response.json().totalEntries).to.be.a(\"number\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Export care report CSV",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/horses/{{horseId}}/care-report?format=csv",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "horses",
+                "{{horseId}}",
+                "care-report"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "csv"
+                }
+              ]
+            },
+            "description": "Same report as a downloaded CSV file."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('CSV file is returned', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('text/csv');",
+                  "  pm.expect(pm.response.text()).to.include('category,item,amount');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sensor readings",
+      "description": "Sensor devices POST water consumed in liters with the horse MongoDB ID. The app uses its bearer token to read latest data and history.",
+      "item": [
+        {
+          "name": "Submit water reading",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-sensor-api-key",
+                "value": "{{sensorApiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"horseId\": \"{{horseId}}\",\n  \"waterConsumedLiters\": 2.5,\n  \"recordedAt\": \"2026-11-05T10:00:00.000Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sensor/readings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sensor",
+                "readings"
+              ]
+            },
+            "description": "Device endpoint. Set SENSOR_API_KEY on the server and sensorApiKey in this environment. waterConsumedLiters is the amount consumed since the previous reading."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Water reading accepted', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  const reading = pm.response.json().reading;",
+                  "  pm.expect(reading.horseId).to.eql(pm.collectionVariables.get('horseId'));",
+                  "  pm.expect(reading.waterConsumedLiters).to.eql(2.5);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get latest water reading",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/horses/{{horseId}}/sensor-readings/latest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "horses",
+                "{{horseId}}",
+                "sensor-readings",
+                "latest"
+              ]
+            },
+            "description": "App endpoint. Uses the collection bearer token and returns the newest reading the signed-in user can access."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Latest reading returned', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().reading.waterConsumedLiters).to.eql(2.5);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get water reading history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/horses/{{horseId}}/sensor-readings?limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "horses",
+                "{{horseId}}",
+                "sensor-readings"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Maximum 100 readings."
+                }
+              ]
+            },
+            "description": "App endpoint. Uses the collection bearer token and returns up to 50 newest readings for this horse."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Reading history returned', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().readings).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Alerts",
+      "description": "Manual alerts only. Nothing in this phase creates an alert from a sensor.",
+      "item": [
+        {
+          "name": "Create alert",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"horseId\": \"{{horseId}}\",\n  \"severity\": \"urgent\",\n  \"kind\": \"noDrink\",\n  \"message\": \"No drink since last night\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/alerts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "alerts"
+              ]
+            },
+            "description": "all_access and basic_access. severity is check or urgent. kind is lowWaterCheck, urgentLowWater, urgentHighWater, persistentHighWater, or noDrink."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Alert opened', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  pm.expect(pm.response.json().alert.state).to.eql('open');",
+                  "  pm.collectionVariables.set('alertId', pm.response.json().alert._id);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List alerts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/alerts?state=open",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "alerts"
+              ],
+              "query": [
+                {
+                  "key": "state",
+                  "value": "open",
+                  "description": "open, acknowledged, or resolved."
+                },
+                {
+                  "key": "severity",
+                  "value": "urgent",
+                  "description": "check or urgent.",
+                  "disabled": true
+                },
+                {
+                  "key": "horseId",
+                  "value": "{{horseId}}",
+                  "description": "Limit the list to one horse.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Barn alerts, newest first. view_only is limited to allowed horses."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get alert",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/alerts/{{alertId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "alerts",
+                "{{alertId}}"
+              ]
+            },
+            "description": "One alert, including the horse name and stall."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Acknowledge alert",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/alerts/{{alertId}}/acknowledge",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "alerts",
+                "{{alertId}}",
+                "acknowledge"
+              ]
+            },
+            "description": "all_access and basic_access. Only an open alert can be acknowledged."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Alert is acknowledged', function () {",
+                  "  pm.expect(pm.response.json().alert.state).to.eql('acknowledged');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Resolve alert",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"manualWaterOffered\",\n  \"note\": \"Offered a bucket and stayed until she drank.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/alerts/{{alertId}}/resolve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "alerts",
+                "{{alertId}}",
+                "resolve"
+              ]
+            },
+            "description": "Action is required: drankAfterCheck, manualWaterOffered, electrolytesOrWetFeed, trainerContacted, veterinarianContacted, horseMoved, watererOrSensorIssue, or other."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Alert is resolved', function () {",
+                  "  const alert = pm.response.json().alert;",
+                  "  pm.expect(alert.state).to.eql('resolved');",
+                  "  pm.expect(alert.resolutionAction).to.eql('manualWaterOffered');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Team",
+      "description": "all_access only. The barn owner cannot be demoted or removed.",
+      "item": [
+        {
+          "name": "List team",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ]
+            },
+            "description": "Everyone in the barn."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invite member",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sam Staff\",\n  \"email\": \"sam.{{$timestamp}}@northbarn.test\",\n  \"role\": \"view_only\",\n  \"allowedHorseIds\": [\n    \"{{horseId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/invite",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "invite"
+              ]
+            },
+            "description": "Creates an invited user and returns a one-time temporary password. view_only access is limited to allowedHorseIds."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Invite created', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.user.status).to.eql('invited');",
+                  "  pm.expect(body.temporaryPassword).to.be.a('string').and.not.empty;",
+                  "  pm.collectionVariables.set('memberId', body.user._id);",
+                  "  pm.collectionVariables.set('memberEmail', body.user.email);",
+                  "  pm.collectionVariables.set('memberPassword', body.temporaryPassword);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as invited member",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{memberEmail}}\",\n  \"password\": \"{{memberPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "First login marks the invited user active. The owner token is left unchanged."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Member is active', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.user.status).to.eql('active');",
+                  "  pm.collectionVariables.set('memberToken', body.token);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List horses as view-only member",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{memberToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/horses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "horses"
+              ]
+            },
+            "description": "Uses the member token. Only allowed horses are returned."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Member sees the allowed horse', function () {",
+                  "  const horses = pm.response.json().horses;",
+                  "  pm.expect(horses.length).to.eql(1);",
+                  "  pm.expect(horses[0]._id).to.eql(pm.collectionVariables.get('horseId'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject owner demotion",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"view_only\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{userId}}"
+              ]
+            },
+            "description": "The barn owner must stay all_access."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", function () {",
+                  "  pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Change member role",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"basic_access\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{memberId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{memberId}}"
+              ]
+            },
+            "description": "Promotes the invited member to basic_access."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Role changed', function () {",
+                  "  pm.expect(pm.response.json().user.role).to.eql('basic_access');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject owner removal",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{userId}}"
+              ]
+            },
+            "description": "The barn owner cannot be removed."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", function () {",
+                  "  pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Remove member",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{memberId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{memberId}}"
+              ]
+            },
+            "description": "Removes the invited member from the barn."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Settings",
+      "description": "Barn name, timezone, check sensitivity, and notification switches. view_only cannot read or change these.",
+      "item": [
+        {
+          "name": "Get settings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "settings"
+              ]
+            },
+            "description": "Current barn settings."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update settings",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"timezone\": \"America/New_York\",\n  \"checkSensitivity\": \"more\",\n  \"notifyUrgent\": true,\n  \"notifyCheck\": true,\n  \"notifyOffline\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "settings"
+              ]
+            },
+            "description": "checkSensitivity is more, standard, or less. Notification fields are true or false."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Sensitivity saved', function () {",
+                  "  pm.expect(pm.response.json().settings.checkSensitivity).to.eql('more');",
+                  "  pm.expect(pm.response.json().settings.notifyOffline).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Subscription",
+      "description": "all_access only. Checkout does not activate the plan. The payment webhook does.",
+      "item": [
+        {
+          "name": "Current plan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/subscription",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "subscription"
+              ]
+            },
+            "description": "Plan and status for this barn. A new barn starts at none."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Checkout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plan\": \"monthly\",\n  \"cardLast4\": \"4242\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/subscription/checkout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "subscription",
+                "checkout"
+              ]
+            },
+            "description": "Starts a pending purchase. plan is monthly or yearly. cardLast4 is 4 digits. Saves checkoutId."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Checkout is pending', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.checkout.status).to.eql('pending');",
+                  "  pm.collectionVariables.set('checkoutId', body.checkout.checkoutId);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject a bad webhook secret",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-webhook-secret",
+                "value": "wrong-secret",
+                "type": "text"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"checkoutId\": \"{{checkoutId}}\",\n  \"event\": \"payment.succeeded\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/webhooks/payment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "webhooks",
+                "payment"
+              ]
+            },
+            "description": "The webhook is not a user route. A wrong secret is rejected and does not change the checkout."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", function () {",
+                  "  pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirm payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-webhook-secret",
+                "value": "{{webhookSecret}}",
+                "type": "text"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"checkoutId\": \"{{checkoutId}}\",\n  \"event\": \"payment.succeeded\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/webhooks/payment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "webhooks",
+                "payment"
+              ]
+            },
+            "description": "payment.succeeded activates the plan and sets the renewal date. payment.failed marks the subscription missed."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Plan is active', function () {",
+                  "  const subscription = pm.response.json().subscription;",
+                  "  pm.expect(subscription.status).to.eql('active');",
+                  "  pm.expect(subscription.plan).to.eql('monthly');",
+                  "  pm.expect(subscription.cardLast4).to.eql('4242');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirm payment again",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-webhook-secret",
+                "value": "{{webhookSecret}}",
+                "type": "text"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"checkoutId\": \"{{checkoutId}}\",\n  \"event\": \"payment.succeeded\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/webhooks/payment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "webhooks",
+                "payment"
+              ]
+            },
+            "description": "Sending the same success event again is safe and stays active."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Still active', function () {",
+                  "  pm.expect(pm.response.json().subscription.status).to.eql('active');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject a late failure",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-webhook-secret",
+                "value": "{{webhookSecret}}",
+                "type": "text"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"checkoutId\": \"{{checkoutId}}\",\n  \"event\": \"payment.failed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/webhooks/payment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "webhooks",
+                "payment"
+              ]
+            },
+            "description": "A failure event for a checkout that already succeeded is rejected. The active plan stays in place."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", function () {",
+                  "  pm.response.to.have.status(409);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Password reset",
+      "description": "Request a 6-digit code, verify it, then set a new password. With SMTP configured, the code is emailed. Without SMTP, and outside production, the code is in the forgot-password response and saved as otp. Existing sessions stop working after the password changes, so this folder logs in again before logout.",
+      "item": [
+        {
+          "name": "Forgot password",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{ownerEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/forgot-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "forgot-password"
+              ]
+            },
+            "description": "Creates a 10-minute code for the owner email. SMTP delivery is used when SMTP_HOST is set. Otherwise the code is returned in this response and stored in otp."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Reset code is ready', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  if (body.otp) pm.collectionVariables.set('otp', body.otp);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{ownerEmail}}\",\n  \"otp\": \"{{otp}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/verify-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "verify-otp"
+              ]
+            },
+            "description": "Exchanges the 6-digit code for a reset token that lasts 15 minutes."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Code verified', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.resetToken).to.be.a('string').and.not.empty;",
+                  "  pm.collectionVariables.set('resetToken', body.resetToken);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reset password",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resetToken\": \"{{resetToken}}\",\n  \"password\": \"{{nextPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "reset-password"
+              ]
+            },
+            "description": "Sets the new password and signs out older tokens. The reset token works once."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Password updated', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login with new password",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{ownerEmail}}\",\n  \"password\": \"{{nextPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Replaces the token that was signed out by the password change."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login with the new password', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.collectionVariables.set('token', pm.response.json().token);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Session",
+      "description": "Run this last. Logout revokes the current token.",
+      "item": [
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Revokes the bearer token until it would have expired."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Logged out', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.collectionVariables.set('revokedToken', pm.collectionVariables.get('token'));",
+                  "  pm.collectionVariables.unset('token');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Revoked token is rejected",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{revokedToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me"
+              ]
+            },
+            "description": "The token from logout can no longer be used."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", function () {",
+                  "  pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test('Token was revoked', function () {",
+                  "  pm.expect(pm.response.json().message).to.eql('Token has been revoked');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

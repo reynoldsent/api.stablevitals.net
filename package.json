@@ -1,0 +1,29 @@
+{
+  "name": "stable-vitals-backend",
+  "version": "1.0.0",
+  "description": "Stable Vitals horse barn monitoring backend API",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "node --test test/phase1.test.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-validator": "^7.0.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^7.6.3",
+    "nodemailer": "^10.3.1"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^11.3.0",
+    "nodemon": "^3.0.1",
+    "supertest": "^7.3.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

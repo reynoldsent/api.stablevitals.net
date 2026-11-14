@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Stable Vitals — Phase 1 Report</title>
+  <style>
+    :root {
+      --ink: #1c1917;
+      --muted: #57534e;
+      --line: #e7e0d6;
+      --paper: #f6f1e8;
+      --card: #fffdf8;
+      --green: #1f6b4a;
+      --green-soft: #e7f4ec;
+      --gold: #9a3412;
+      --gold-soft: #fff4e8;
+    }
+
+    * { box-sizing: border-box; }
+
+    @page {
+      size: A4;
+      margin: 14mm 14mm 16mm;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: "Segoe UI", Georgia, sans-serif;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .sheet {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 28px 28px 40px;
+    }
+
+    header.cover {
+      background: #1c2b24;
+      color: #f6f1e8;
+      border-radius: 18px;
+      padding: 28px 30px 24px;
+      margin-bottom: 22px;
+    }
+
+    .eyebrow {
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      font-size: 11px;
+      color: #d6c4a4;
+      margin: 0 0 8px;
+    }
+
+    h1 {
+      font-family: Georgia, "Times New Roman", serif;
+      font-weight: 600;
+      font-size: 34px;
+      line-height: 1.05;
+      margin: 0 0 8px;
+    }
+
+    header.cover p {
+      margin: 0;
+      max-width: 560px;
+      color: #e7e0d6;
+    }
+
+    .meta {
+      display: flex;
+      gap: 18px;
+      margin-top: 18px;
+      font-size: 12px;
+      color: #d6c4a4;
+    }
+
+    .banner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--green);
+      color: white;
+      border-radius: 14px;
+      padding: 16px 20px;
+      margin-bottom: 22px;
+    }
+
+    .banner strong {
+      display: block;
+      font-family: Georgia, serif;
+      font-size: 22px;
+      font-weight: 600;
+    }
+
+    .banner span { opacity: 0.9; font-size: 12px; }
+
+    h2 {
+      font-family: Georgia, serif;
+      font-size: 22px;
+      margin: 26px 0 10px;
+    }
+
+    p.lead { margin: 0 0 12px; color: var(--muted); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+
+    th {
+      background: #efe8dc;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .pass {
+      color: var(--green);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .done {
+      display: inline-block;
+      background: var(--green-soft);
+      color: var(--green);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+
+    .card h3 {
+      margin: 0 0 4px;
+      font-size: 14px;
+    }
+
+    .card p { margin: 0; color: var(--muted); font-size: 12px; }
+
+    .flow {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px 16px 8px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 10px;
+      margin-bottom: 8px;
+      page-break-inside: avoid;
+    }
+
+    .num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #1c2b24;
+      color: #f6f1e8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .step .box {
+      background: var(--paper);
+      border-radius: 10px;
+      padding: 8px 12px;
+    }
+
+    .step strong { display: block; }
+    .step em { color: var(--muted); font-style: normal; font-size: 12px; }
+
+    .branch {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin: 4px 0 12px 38px;
+    }
+
+    .branch div {
+      background: var(--gold-soft);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+
+    .note {
+      background: var(--gold-soft);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-top: 14px;
+    }
+
+    .note strong { color: var(--gold); }
+
+    code {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 11px;
+    }
+
+    footer {
+      margin-top: 22px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    @media print {
+      body { background: white; }
+      .sheet { padding: 0; max-width: none; }
+      header.cover, .banner, .card, table, .flow { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <main class="sheet">
+    <header class="cover">
+      <p class="eyebrow">Stable Vitals · Backend</p>
+      <h1>Phase 1 report</h1>
+      <p>Barn account, horses, care records, team, settings, subscription, manual alerts, and password reset by email.</p>
+      <div class="meta">
+        <span>5 November 2026</span>
+        <span>API version 1</span>
+        <span>Water sensor API included</span>
+      </div>
+    </header>
+
+    <section class="banner">
+      <div>
+        <strong>16 of 16 tests passed</strong>
+        <span>Full API suite, 0 failed</span>
+      </div>
+      <div>Phase 1 complete</div>
+    </section>
+
+    <h2>Test results</h2>
+    <p class="lead">Each row is one automated test against the real API and a temporary database.</p>
+    <table>
+      <thead>
+        <tr><th>Area</th><th>Result</th><th>What was checked</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Health</td><td class="pass">Pass</td><td>The API is up and the database is connected.</td></tr>
+        <tr><td>Signup</td><td class="pass">Pass</td><td>Barn, owner, and an empty subscription are created together. A duplicate email is rejected.</td></tr>
+        <tr><td>Login</td><td class="pass">Pass</td><td>A wrong password is rejected. The right password returns a token.</td></tr>
+        <tr><td>Current user</td><td class="pass">Pass</td><td><code>GET /api/v1/me</code> returns the user, role, and barn. A missing token is rejected.</td></tr>
+        <tr><td>Horses</td><td class="pass">Pass</td><td>Add, list, edit, move stall, archive, and unarchive. Another barn cannot open the horse.</td></tr>
+        <tr><td>Sensor readings</td><td class="pass">Pass</td><td>Sensor API key, validated water readings, and authenticated latest/history access scoped to the horse's barn.</td></tr>
+        <tr><td>Profile</td><td class="pass">Pass</td><td>Staff note, care entry, JSON report, CSV export, and profile counts.</td></tr>
+        <tr><td>Settings</td><td class="pass">Pass</td><td>Sensitivity and notification flags save and read back.</td></tr>
+        <tr><td>Subscription</td><td class="pass">Pass</td><td>Checkout stays pending. A bad webhook secret is rejected. Payment success activates the plan.</td></tr>
+        <tr><td>Alerts</td><td class="pass">Pass</td><td>Manual alert, acknowledge, and resolve with an action. Resolve without an action is rejected.</td></tr>
+        <tr><td>Team</td><td class="pass">Pass</td><td>Invite, view-only horse limit, and role change. The owner cannot be demoted or removed.</td></tr>
+        <tr><td>Password reset</td><td class="pass">Pass</td><td>Code, verify OTP, one-time reset. The old password fails and the old token is rejected.</td></tr>
+        <tr><td>Logout</td><td class="pass">Pass</td><td>The token is revoked and cannot be used again.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>What is included</h2>
+    <div class="grid">
+      <article class="card"><h3>Auth <span class="done">Done</span></h3><p>Signup, login, current user, and logout. Logout revokes the token.</p></article>
+      <article class="card"><h3>Password reset <span class="done">Done</span></h3><p>Forgot password, verify the 6-digit code, set a new password. Email uses Nodemailer.</p></article>
+      <article class="card"><h3>Horses <span class="done">Done</span></h3><p>List, add, edit, archive, and move to a new stall.</p></article>
+      <article class="card"><h3>Water sensor API <span class="done">Done</span></h3><p>Accept water consumed in liters with a horse ID and return authorized latest readings or history.</p></article>
+      <article class="card"><h3>Profile <span class="done">Done</span></h3><p>Full profile, staff notes, care log, and a 30-day care report, including CSV.</p></article>
+      <article class="card"><h3>Subscription <span class="done">Done</span></h3><p>Current plan, checkout, and payment confirmation webhook.</p></article>
+      <article class="card"><h3>Alerts <span class="done">Done</span></h3><p>Create, list, acknowledge, and resolve. Alerts are manual in this phase.</p></article>
+      <article class="card"><h3>Team <span class="done">Done</span></h3><p>List, invite, change role, and remove. The barn owner is protected.</p></article>
+      <article class="card"><h3>Settings <span class="done">Done</span></h3><p>Read and update sensitivity plus urgent, check, and offline notifications.</p></article>
+    </div>
+
+    <h2>How the app flows</h2>
+    <div class="flow">
+      <div class="step"><div class="num">1</div><div class="box"><strong>Create the barn</strong><em>POST /api/v1/auth/signup creates the barn, the owner, and a subscription with status none.</em></div></div>
+      <div class="step"><div class="num">2</div><div class="box"><strong>Sign in</strong><em>POST /api/v1/auth/login returns a 7-day token. GET /api/v1/me shows the user and role.</em></div></div>
+      <div class="step"><div class="num">3</div><div class="box"><strong>Add horses</strong><em>List, add, edit, archive, or move a horse. Moving a horse updates the stall and sensor id.</em></div></div>
+      <div class="step"><div class="num">4</div><div class="box"><strong>Keep the profile</strong><em>Staff notes, care entries, and a care report for the last 30 days. The report can be JSON or CSV.</em></div></div>
+      <div class="step"><div class="num">5</div><div class="box"><strong>Handle an alert</strong><em>A person creates the alert, acknowledges it, then resolves it with an action.</em></div></div>
+      <div class="step"><div class="num">6</div><div class="box"><strong>Invite the team</strong><em>The owner invites a member and sets a role.</em></div></div>
+      <div class="branch">
+        <div><strong>all_access</strong><br />Horses, team, billing, and settings.</div>
+        <div><strong>basic_access</strong><br />Notes, care, alerts, and settings.</div>
+        <div><strong>view_only</strong><br />Only the horses they are allowed to see.</div>
+      </div>
+      <div class="step"><div class="num">7</div><div class="box"><strong>Barn settings</strong><em>Update check sensitivity and which notifications are on.</em></div></div>
+      <div class="step"><div class="num">8</div><div class="box"><strong>Buy a plan</strong><em>Checkout stays pending until POST /api/v1/webhooks/payment confirms payment.succeeded.</em></div></div>
+      <div class="step"><div class="num">9</div><div class="box"><strong>Reset a password</strong><em>Request a code, receive it by email, verify the code, then set a new password. Older tokens stop working.</em></div></div>
+      <div class="step"><div class="num">10</div><div class="box"><strong>Log out</strong><em>POST /api/v1/auth/logout revokes the token.</em></div></div>
+    </div>
+
+    <div class="note">
+      <strong>Outside this phase.</strong>
+      Automatic alerts from sensor readings are not built yet. Sensor ingestion requires <code>SENSOR_API_KEY</code> in <code>.env</code>. Checkout does not charge a card by itself. The reset email is sent only after <code>SMTP_HOST</code>, <code>SMTP_USER</code>, <code>SMTP_PASS</code>, and <code>SMTP_FROM</code> are set in <code>.env</code>. Until then, development returns the code in the API response.
+    </div>
+
+    <footer>Stable Vitals backend · Phase 1 · Generated 29 October 2026 · Postman collection is in the postman folder.</footer>
+  </main>
+</body>
+</html>

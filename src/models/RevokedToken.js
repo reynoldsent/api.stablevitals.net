@@ -1,0 +1,18 @@
+const mongoose = require('mongoose');
+
+const revokedTokenSchema = new mongoose.Schema({
+  jti: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  expiresAt: {
+    type: Date,
+    required: true,
+  },
+});
+
+// Drop the record once the original JWT would have expired.
+revokedTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+module.exports = mongoose.model('RevokedToken', revokedTokenSchema);
