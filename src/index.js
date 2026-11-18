@@ -23,6 +23,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+console.log("========== SERVER STARTING ==========");
+console.log("Node version:", process.version);
+console.log("Environment:", process.env.NODE_ENV);
+console.log("Mongo URI exists:", !!process.env.MONGODB_URI);
+console.log("Port:", process.env.PORT);
+
 app.get('/health', (_req, res) => {
   const connected = mongoose.connection.readyState === 1;
   res.status(connected ? 200 : 503).json({
