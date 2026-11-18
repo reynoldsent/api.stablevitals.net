@@ -26,7 +26,7 @@ app.use(express.json());
 console.log("========== SERVER STARTING ==========");
 console.log("Node version:", process.version);
 console.log("Environment:", process.env.NODE_ENV);
-console.log("Mongo URI exists:", !!process.env.MONGODB_URI);
+console.log("Mongo URI exists:", process.env.MONGODB_URI);
 console.log("Port:", process.env.PORT);
 
 app.get('/health', (_req, res) => {
