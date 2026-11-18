@@ -50,18 +50,38 @@ app.use('/api/v1/webhooks', webhookRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
-if (require.main === module) {
-  if (!process.env.MONGODB_URI || !process.env.JWT_SECRET) {
-    console.error('MONGODB_URI and JWT_SECRET are required');
-    process.exit(1);
-  }
 
-  const port = process.env.PORT || 3000;
-  connectDB().then(() => {
-    app.listen(port, () => {
-      console.log(`API listening on port ${port}`);
-    });
-  });
+if (require.main === module) {
+  const startServer = async () => {
+    try {
+      console.log("STEP 1: Starting application");
+
+      if (!process.env.MONGODB_URI || !process.env.JWT_SECRET) {
+        throw new Error("Required environment variables are missing");
+      }
+
+      console.log("STEP 2: Environment variables verified");
+      console.log("STEP 3: Connecting to MongoDB...");
+
+      await connectDB();
+
+      console.log("STEP 4: MongoDB connected");
+
+      const port = process.env.PORT || 3000;
+
+      app.listen(port, () => {
+        console.log(`STEP 5: API listening on port ${port}`);
+      });
+
+    } catch (error) {
+      console.error("STARTUP FAILED:", error.name);
+      console.error("ERROR MESSAGE:", error.message);
+      process.exit(1);
+    }
+  };
+
+  startServer();
 }
+
 
 module.exports = app;
