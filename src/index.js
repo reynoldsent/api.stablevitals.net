@@ -23,11 +23,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-console.log("========== SERVER STARTING ==========");
-console.log("Node version:", process.version);
-console.log("Environment:", process.env.NODE_ENV);
-console.log("Mongo URI exists:", process.env.MONGODB_URI);
-console.log("Port:", process.env.PORT);
+console.log("🔥 STABLE VITALS VERSION 2.0 🔥");
+console.log("ENTRY FILE:", __filename);
+console.log("NODE VERSION:", process.version);
+console.log("MONGODB URI CONFIGURED:", !!process.env.MONGODB_URI);
 
 app.get('/health', (_req, res) => {
   const connected = mongoose.connection.readyState === 1;
