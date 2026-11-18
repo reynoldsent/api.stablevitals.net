@@ -50,37 +50,37 @@ app.use(notFound);
 app.use(errorHandler);
 
 
-if (require.main === module) {
-  const startServer = async () => {
-    try {
-      console.log("STEP 1: Starting application");
 
-      if (!process.env.MONGODB_URI || !process.env.JWT_SECRET) {
-        throw new Error("Required environment variables are missing");
-      }
+const startServer = async () => {
+  try {
+    console.log("STEP 1: Starting application");
 
-      console.log("STEP 2: Environment variables verified");
-      console.log("STEP 3: Connecting to MongoDB...");
-
-      await connectDB();
-
-      console.log("STEP 4: MongoDB connected");
-
-      const port = process.env.PORT || 3000;
-
-      app.listen(port, () => {
-        console.log(`STEP 5: API listening on port ${port}`);
-      });
-
-    } catch (error) {
-      console.error("STARTUP FAILED:", error.name);
-      console.error("ERROR MESSAGE:", error.message);
-      process.exit(1);
+    if (!process.env.MONGODB_URI || !process.env.JWT_SECRET) {
+      throw new Error("Required environment variables are missing");
     }
-  };
 
-  startServer();
-}
+    console.log("STEP 2: Environment variables verified");
+    console.log("STEP 3: Connecting to MongoDB...");
+
+    await connectDB();
+
+    console.log("STEP 4: MongoDB connected");
+
+    const port = process.env.PORT || 3000;
+
+    app.listen(port, () => {
+      console.log(`STEP 5: API listening on port ${port}`);
+    });
+
+  } catch (error) {
+    console.error("STARTUP FAILED:", error.message);
+    process.exit(1);
+  }
+};
+
+startServer();
+
+
 
 
 module.exports = app;
